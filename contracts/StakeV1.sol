@@ -241,7 +241,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
         // Condition to check whether unbonding period is finished or not
         require(currentTimestamp - timeAtunstake >= unbondingPeriod, "You need to wait for the Unbonding Period to withdraw the NFT");
-        nftContract.safeTransferFrom(address(this), msg.sender, _nftID);
+        nftContract.transferNFT(address(this), msg.sender, _nftID);
 
         // Setting the Id for user's Owned NFT to 0 - It is no longer under staking.
         for(uint i;  i < usersNFTs[msg.sender].length; i++) {
