@@ -160,7 +160,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         
 
         console.log("The id of the staked NFT is: ", totalStakedNFTs[stakeCounter].nftID);
-        nftContract.transferFrom(msg.sender, address(this), _nftID);
+        nftContract.safeTransferFrom(msg.sender, address(this), _nftID);
 
         // Change the bool to true here to say - No more need for adding a Genesis gap.
         emptyorfull = true;
