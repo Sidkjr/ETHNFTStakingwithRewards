@@ -60,6 +60,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
     // Represents the status of the Genesis Gap
     bool public emptyorfull;
 
+    uint256 totalNFTsReward;
+
     event Stake(address _user, uint256 _nftID, uint256 _timestamp);
     event StakeBatch(address _user, uint[] _nftIDs, uint256 _timestamp);
     event Unstake(address _user, uint256 _nftID, uint256 _timestamp);
@@ -106,7 +108,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
     // Stakes 1 NFT from the user.
 
-    function stakeNFT(uint256 _nftID) public nonReentrant {
+    function stakeNFT(uint256 _nftID) public nonReentrant whenNotPaused {
 
         // A genesis NFT space reserved to stop comparing zeroed-values. Hence NFT locations will start from 1 index as well the NFT IDs.
         if(emptyorfull == false) {
@@ -159,8 +161,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         nftLocs[_nftID] = stakeCounter;
         
 
-        console.log("The id of the staked NFT is: ", totalStakedNFTs[stakeCounter].nftID);
-        nftContract.safeTransferFrom(msg.sender, address(this), _nftID);
+        // console.log("The id of the staked NFT is: ", totalStakedNFTs[stakeCounter].nftID);
+        nftContract.transferNFT(msg.sender, address(this), _nftID);
 
         // Change the bool to true here to say - No more need for adding a Genesis gap.
         emptyorfull = true;
@@ -170,7 +172,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
     // Stakes multiple NFTs (limit: 10 to optimize gas) 
 
-    function stakeBatchNFT(uint[] calldata _nftIDs) public nonReentrant {
+    function stakeBatchNFT(uint[] calldata _nftIDs) public nonReentrant whenNotPaused {
 
         // First Check if the there are only 10 NFTs to stake or not  
         require(_nftIDs.length <= 10, "You can only stake 10 NFTs in a single transaction");
@@ -215,7 +217,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             totalStakedNFTs.push(newStake);
             usersNFTs[msg.sender].push(_nftIDs[i]);
             nftLocs[_nftIDs[i]] = stakeCounter;
-            nftContract.safeTransferFrom(msg.sender, address(this), _nftIDs[i]);
+            nftContract.transferNFT(msg.sender, address(this), _nftIDs[i]);
             unchecked {
                 ++i;
             }
@@ -225,14 +227,15 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             usersDelay[msg.sender] = block.timestamp + delayPeriod;
         }
         emptyorfull = true;
-        console.log("All NFTs staked successfully!");
+        // console.log("All NFTs staked successfully!");
         emit StakeBatch(msg.sender, _nftIDs, block.timestamp);
 
     }
 
     // User can only withdraw the NFT until they have Unstaked it and only after the unbonding period.
-    function withdrawNFT(uint _nftID) public nonReentrant {
-        
+    function withdrawNFT(uint _nftID) public nonReentrant whenNotPaused(){
+        uint indexat = nftLocs[_nftID];
+        require(totalStakedNFTs[indexat].nftID == 0, "You cannot withdraw until you unstake the NFT");
         uint256 currentTimestamp = block.timestamp;
         uint256 timeAtunstake = timeatUnStake[_nftID];
 
@@ -249,7 +252,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
     }
 
     // Unstakes 1 NFT - Removes/Stops the rewards for that specific NFT and also set the Unbonding period here. 
-    function unstakeOne(uint _nftID) public nonReentrant {
+    function unstakeOne(uint _nftID) public nonReentrant whenNotPaused {
 
         uint nftLocation = getNFTLoc(_nftID);
         require(totalStakedNFTs[nftLocation].owner == msg.sender, "You do not own this NFT to unstake it.");
@@ -264,7 +267,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
     // Unstakes multiple NFTs 
 
-    function unstakeBatch(uint[] calldata _nftIDs) public nonReentrant {
+    function unstakeBatch(uint[] calldata _nftIDs) public nonReentrant whenNotPaused {
 
         for(uint i; i < _nftIDs.length; i++) {  
             uint nftLocation = getNFTLoc(_nftIDs[i]);
@@ -284,7 +287,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
     function calcRewards(address _user) public returns (uint256) {
         uint currentBlock = block.timestamp;
         uint[] memory userstakedNFTs = getUserNFTs(_user);
-        uint256 totalNFTsReward;
+        totalNFTsReward = 0;
 
         // Loops reason - Every NFT Staked, will have different timestamps, Meaning different rewards. So gather all of the rewards, and return the total rewards for the user.
         for(uint i = 0; i < userstakedNFTs.length; i++) {
@@ -293,38 +296,49 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             uint256 rewardPerNFT = rewardRate * blockDifference;
             totalNFTsReward += rewardPerNFT;
             totalStakedNFTs[indexofNFT].rewards = rewardPerNFT;
+            totalStakedNFTs[indexofNFT].timestamp = currentBlock + 1;
         }
-        console.log("The total reward is: ", totalNFTsReward);
+        // console.log("The total reward is: ", totalNFTsReward);
         return totalNFTsReward;
     }
 
     // Checks if the delay period is over to claim the rewards. The transaction fails until the delay period is over.
-    function claimrewards() public nonReentrant {
-        uint256 userDelay = usersDelay[msg.sender];
-        require(block.timestamp - userDelay >= delayPeriod, "You must wait until the delay period to claim rewards.");
+    function claimrewards() public nonReentrant whenNotPaused {
+
         uint256 amount = calcRewards(msg.sender);
+        require(amount > 0, "There are no rewards to claim");
+
+        uint256 userDelay = usersDelay[msg.sender];
+        uint blockDifference;
+        unchecked {
+            blockDifference = userDelay - block.timestamp ;
+        }
+        require(blockDifference >= delayPeriod, "You must wait until the delay period to claim rewards.");
         _mint(msg.sender, amount);
+
 
         // Keep track of total rewards sent to users
         rewardsDisbursed += amount;
 
         // Reset the delay for the user after rewards are claimed.
         resetDelay(msg.sender);
-        console.log("The amount sent to ", msg.sender, " is: ", amount);
 
         // This block resets the reward values of all NFTs staked by the user to 0.
         uint[] memory userstakedNFTs = getUserNFTs(msg.sender);
         for(uint i = 0; i < userstakedNFTs.length; i++) {
             uint256 indexofNFT = nftLocs[userstakedNFTs[i]];
+            // console.log("The index of the NFT is at: ", indexofNFT);
             totalStakedNFTs[indexofNFT].rewards = 0;
         }
+        // console.log("The amount sent to ", msg.sender, " is: ", amount);
         emit claimRewards(msg.sender, amount);
     }
 
     // Secondary function that set's the delay period for the user
 
     function resetDelay(address _user) public {
-        usersDelay[_user] = block.timestamp + delayPeriod;   
+        uint currentblock = block.timestamp;
+        usersDelay[_user] = currentblock + delayPeriod;   
     }
 
     // Pause and Unpause functionality for the Smart Contract.
