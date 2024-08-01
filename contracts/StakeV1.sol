@@ -62,7 +62,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
     event Stake(address _user, uint256 _nftID, uint256 _timestamp);
     event StakeBatch(address _user, uint[] _nftIDs, uint256 _timestamp);
-    event Unstake(address _user, uint256 _nftID);
+    event Unstake(address _user, uint256 _nftID, uint256 _timestamp);
+    event UnstakeBatch(address _user, uint[] _nftIDs, uint256 _timestamp);
     event claimRewards(address _user, uint256 _amount);
 
     // Initializes the parameters required by the proxy
@@ -257,6 +258,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         timeatUnStake[_nftID] = block.timestamp + unbondingPeriod;
         nftLocs[_nftID] = 0;
         delete totalStakedNFTs[nftLocation];
+
+        emit Unstake(msg.sender, _nftID, block.timestamp);
     }
 
     // Unstakes multiple NFTs 
@@ -272,6 +275,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             nftLocs[_nftIDs[i]] = 0;
             delete totalStakedNFTs[nftLocation];
         }
+
+        emit UnstakeBatch(msg.sender, _nftIDs, block.timestamp);
     }
 
     // Secondary function - Used to calculate rewards for a user.
@@ -313,7 +318,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             uint256 indexofNFT = nftLocs[userstakedNFTs[i]];
             totalStakedNFTs[indexofNFT].rewards = 0;
         }
-
+        emit claimRewards(msg.sender, amount);
     }
 
     // Secondary function that set's the delay period for the user
@@ -334,7 +339,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
 
 
     // Upgrade authorization function to upgrade the contract.
-    
+
     function _authorizeUpgrade(address newImplementation)
         internal
         onlyOwner
