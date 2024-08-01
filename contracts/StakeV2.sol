@@ -360,14 +360,20 @@ contract StakeV2 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         override
     {}
 
+    // StakeV2 OnlyOwner functions
+
+
+    // Allows the owner to change the reward rate.
     function changeRewardRate(uint256 amount) public onlyOwner {
         rewardRate = amount;
     }
 
+    // Allows the owner to change the delate period. 
     function changedelayRate(uint256 amount) public onlyOwner {
         delayPeriod = amount;
     }
 
+    // Allows the owner to change the unbonding period.
     function changeunbondingPeriod(uint256 amount) public onlyOwner {
         unbondingPeriod = amount;
     } 
