@@ -32,6 +32,9 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
     // This array of struct type: StakedNFT stores all the NFT objects currently under Staking.
     StakedNFT[] public totalStakedNFTs;
 
+    // This mapping helps to track the NFT rewards independently without causing loopholes. 
+    mapping(uint => uint) lastRewardChecked;
+
     // This maps the NFT ID with the location/index of the StakedNFT object from the above StakedNFT[] array.
     mapping(uint => uint) nftLocs;
 
@@ -119,7 +122,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
                 timestamp: 0
             });
             totalStakedNFTs.push(genesis);
-
+            lastRewardChecked[0] = 0;
         }
 
         // Check to see if the owner is the one staking the NFT or not
@@ -142,6 +145,8 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             rewards: 0,
             timestamp: block.timestamp
         });
+
+        lastRewardChecked[_nftID] = block.timestamp;
 
         // Increment the amount of staked NFTs by one
         stakeCounter++;
@@ -186,6 +191,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
                 timestamp: 0
             });
             totalStakedNFTs.push(genesis);
+            lastRewardChecked[0] = 0;
         }
 
         // Condition to check whether the NFTs are owned by the user or not. Also to check whether that NFT is already being staked or not.
@@ -213,6 +219,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
                 rewards: 0,
                 timestamp: block.timestamp
             });
+            lastRewardChecked[_nftIDs[i]] = block.timestamp;
             stakeCounter++;
             totalStakedNFTs.push(newStake);
             usersNFTs[msg.sender].push(_nftIDs[i]);
@@ -238,9 +245,12 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         require(totalStakedNFTs[indexat].nftID == 0, "You cannot withdraw until you unstake the NFT");
         uint256 currentTimestamp = block.timestamp;
         uint256 timeAtunstake = timeatUnStake[_nftID];
-
+        uint256 difference;
         // Condition to check whether unbonding period is finished or not
-        require(currentTimestamp - timeAtunstake >= unbondingPeriod, "You need to wait for the Unbonding Period to withdraw the NFT");
+        unchecked {
+            difference = currentTimestamp - timeAtunstake;
+        }
+        require(difference >= unbondingPeriod, "You need to wait for the Unbonding Period to withdraw the NFT");
         nftContract.transferNFT(address(this), msg.sender, _nftID);
 
         // Setting the Id for user's Owned NFT to 0 - It is no longer under staking.
@@ -258,7 +268,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         require(totalStakedNFTs[nftLocation].owner == msg.sender, "You do not own this NFT to unstake it.");
 
         // Setting the unbonding period for the NFT to restrict withdraw for some time.
-        timeatUnStake[_nftID] = block.timestamp + unbondingPeriod;
+        timeatUnStake[_nftID] = block.timestamp + unbondingPeriod + 1;
         nftLocs[_nftID] = 0;
         delete totalStakedNFTs[nftLocation];
 
@@ -274,7 +284,7 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
             require(totalStakedNFTs[nftLocation].owner == msg.sender, "You do not own an NFT in the batch to unstake it.");
 
             // Set unbonding period 
-            timeatUnStake[_nftIDs[i]] = block.timestamp + unbondingPeriod;
+            timeatUnStake[_nftIDs[i]] = block.timestamp + unbondingPeriod + 1;
             nftLocs[_nftIDs[i]] = 0;
             delete totalStakedNFTs[nftLocation];
         }
@@ -292,28 +302,31 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         // Loops reason - Every NFT Staked, will have different timestamps, Meaning different rewards. So gather all of the rewards, and return the total rewards for the user.
         for(uint i = 0; i < userstakedNFTs.length; i++) {
             uint256 indexofNFT = nftLocs[userstakedNFTs[i]];
-            uint256 blockDifference = currentBlock - totalStakedNFTs[indexofNFT].timestamp;
-            uint256 rewardPerNFT = rewardRate * blockDifference;
+            uint256 lastcheckd = lastRewardChecked[userstakedNFTs[i]];
+            uint256 blockDifference = currentBlock - lastcheckd;
+            uint256 rewardPerNFT = (blockDifference * rewardRate * 10 ** decimals()) / 3600;
             totalNFTsReward += rewardPerNFT;
             totalStakedNFTs[indexofNFT].rewards = rewardPerNFT;
-            totalStakedNFTs[indexofNFT].timestamp = currentBlock + 1;
+            lastRewardChecked[i] = block.timestamp;
         }
-        // console.log("The total reward is: ", totalNFTsReward);
-        return totalNFTsReward;
+        console.log("The total reward is: ", totalNFTsReward / 1e18);
+        return totalNFTsReward / 1e18;
     }
 
     // Checks if the delay period is over to claim the rewards. The transaction fails until the delay period is over.
     function claimrewards() public nonReentrant whenNotPaused {
 
         uint256 amount = calcRewards(msg.sender);
-        require(amount > 0, "There are no rewards to claim");
 
         uint256 userDelay = usersDelay[msg.sender];
         uint blockDifference;
         unchecked {
             blockDifference = userDelay - block.timestamp ;
         }
+        require(amount >= 1, "There are no rewards to claim");
         require(blockDifference >= delayPeriod, "You must wait until the delay period to claim rewards.");
+        
+
         _mint(msg.sender, amount);
 
 
@@ -328,9 +341,10 @@ contract StakeV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         for(uint i = 0; i < userstakedNFTs.length; i++) {
             uint256 indexofNFT = nftLocs[userstakedNFTs[i]];
             // console.log("The index of the NFT is at: ", indexofNFT);
-            totalStakedNFTs[indexofNFT].rewards = 0;
+            totalStakedNFTs[indexofNFT].rewards = 0 * 10 ** 18;
+            lastRewardChecked[totalStakedNFTs[indexofNFT].nftID] = block.timestamp + 1;
         }
-        // console.log("The amount sent to ", msg.sender, " is: ", amount);
+        console.log("The amount sent to ", msg.sender, " is: ", amount);
         emit claimRewards(msg.sender, amount);
     }
 

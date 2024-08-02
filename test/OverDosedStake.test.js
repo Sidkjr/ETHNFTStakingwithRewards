@@ -11,7 +11,7 @@ describe("StakeV1", function () {
     const OverDosed = await ethers.getContractFactory("OverDosed");
 
     delayPeriod = 60;
-    rewardRate = 1;
+    rewardRate = 3600;
     unbondingPeriod = 30; 
 
     overdosed = await OverDosed.deploy();
@@ -202,9 +202,9 @@ describe("StakeV2", function () {
     [deployer, user1, user2] = await ethers.getSigners();
     const OverDosed = await ethers.getContractFactory("OverDosed");
 
-    delayPeriod = 60;
-    rewardRate = 1;
-    unbondingPeriod = 30; 
+    delayPeriod = 4000;
+    rewardRate = 10;
+    unbondingPeriod = 3000; 
 
     overdosed = await OverDosed.deploy();
 
@@ -285,49 +285,49 @@ describe("StakeV2", function () {
       await expect(proxy.connect(user1).claimrewards()).to.be.revertedWith('There are no rewards to claim');
     })
 
-    it("User 1 properly stakes 1 NFT and waits 2 minutes for the rewards", async function() {
+    it("User 1 properly stakes 1 NFT and waits 83 minutes for the rewards", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(5000);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
     })
 
     it("User 1 stakes 1 NFT, claims rewards, but requests again and fails to claim more(Reset Accumulated rewards)", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(4100);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
       await expect(proxy.connect(user1).claimrewards()).to.be.revertedWith('There are no rewards to claim');
     })
 
     it("User 1 stakes 1 NFT, doesn't wait for the delay Period and fails to claim rewards", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(10);
+      await time.increase(3800);
       await expect(proxy.connect(user1).claimrewards()).to.be.revertedWith('You must wait until the delay period to claim rewards.');
     })
     it("User 1 stakes 1 NFT, User 2 stakes 2 NFTs, both are rewarded with different amount of tokens", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
       expect(await proxy.connect(user2).stakeBatchNFT([2,3])).to.emit(proxy, "StakeBatch");
-      await time.increase(60);
+      await time.increase(5000);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
     })
   })
 
   describe("Unstaking NFTs", async () => {
-    it("User 1 stakes 1 NFT, waits 2 minutes, claims rewards and decides to unstake and withdraw only AFTER the unbonding period ends", async function() {
+    it("User 1 stakes 1 NFT, waits 83 minutes, claims rewards and decides to unstake and withdraw only AFTER the unbonding period ends", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(5000);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user1).unstakeOne(1)).to.emit(proxy, "Unstake");
-      await time.increase(60);
+      await time.increase(3200);
       await expect(proxy.connect(user1).withdrawNFT(1))
     })
 
-    it("User 1 stakes 1 NFT, waits 2 minutes, claims rewards and decides to unstake and fails to withdraw BEFORE the unbonding period ends", async function() {
+    it("User 1 stakes 1 NFT, waits 83 minutes, claims rewards and decides to unstake and fails to withdraw BEFORE the unbonding period ends", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(5000);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user1).unstakeOne(1)).to.emit(proxy, "Unstake");
-      await time.increase(30);
+      await time.increase(3000);
       await expect(proxy.connect(user1).withdrawNFT(1)).to.be.revertedWith('You need to wait for the Unbonding Period to withdraw the NFT');
     })
 
@@ -338,34 +338,24 @@ describe("StakeV2", function () {
       await expect(proxy.connect(user2).unstakeOne(1)).to.be.revertedWith('You do not own this NFT to unstake it.');
     })
 
-    it("User 2 stakes 2 NFTs, waits 2 minutes, claims rewards and decides to unstake both and withdraw only AFTER the unbonding period ends", async function() {
+    it("User 2 stakes 2 NFTs, waits 83 minutes, claims rewards and decides to unstake both and withdraw only AFTER the unbonding period ends", async function() {
       expect(await proxy.connect(user2).stakeBatchNFT([2,3])).to.emit(proxy, "StakeBatch");
-      await time.increase(120);
+      await time.increase(5000);
       expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user2).unstakeBatch([2,3])).to.emit(proxy, "UnstakeBatch");
-      await time.increase(60);
+      await time.increase(3300);
       await expect(proxy.connect(user1).withdrawNFT(2));
       await expect(proxy.connect(user2).withdrawNFT(3));
     })
 
     it("User 2 stakes 2 NFTs, waits 2 minutes, claims rewards and decides to unstake one but fails to withdraw both AFTER the unbonding period ends", async function() {
       expect(await proxy.connect(user2).stakeBatchNFT([2,3])).to.emit(proxy, "StakeBatch");
-      await time.increase(120);
+      await time.increase(5000);
       expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user2).unstakeOne(2)).to.emit(proxy, "Unstake");
-      await time.increase(60);
+      await time.increase(3200);
       await expect(proxy.connect(user1).withdrawNFT(2));
       await expect(proxy.connect(user2).withdrawNFT(3)).to.be.revertedWith('You cannot withdraw until you unstake the NFT');
-    })
-
-    it("User 2 stakes 2 NFTs, waits 2 minutes, claims rewards and decides to unstake both to withdraw both AFTER the unbonding period ends", async function() {
-      expect(await proxy.connect(user2).stakeBatchNFT([2,3])).to.emit(proxy, "StakeBatch");
-      await time.increase(120);
-      expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
-      expect(await proxy.connect(user2).unstakeBatch([2,3])).to.emit(proxy, "UnstakeBatch");
-      await time.increase(60);
-      await expect(proxy.connect(user1).withdrawNFT(2));
-      await expect(proxy.connect(user2).withdrawNFT(3));
     })
   })
 
@@ -382,7 +372,7 @@ describe("StakeV2", function () {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
       expect(await proxy.connect(user2).stakeNFT(2)).to.emit(proxy, "Stake");
       await expect(proxy.connect(user1).pause()).to.be.revertedWithCustomError(proxy, 'OwnableUnauthorizedAccount')
-      await time.increase(120);
+      await time.increase(4100);
       expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
     })
   })
@@ -390,44 +380,76 @@ describe("StakeV2", function () {
   describe("Upgraded Owner calls", async() => {
     it("The owner is able to change rewardsRate", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(4300);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
-      await proxy.connect(deployer).changeRewardRate(2)
+      await proxy.connect(deployer).changeRewardRate(8)
       expect(await proxy.connect(user2).stakeNFT(2)).to.emit(proxy, "Stake");
-      await time.increase(120);
+      await time.increase(4300);
       expect(await proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
     })
 
     it("The owner is able to change delayPeriod", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(70);
+      await time.increase(4100);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
-      await proxy.connect(deployer).changedelayRate(400)
+      await proxy.connect(deployer).changedelayRate(5000)
       expect(await proxy.connect(user2).stakeNFT(2)).to.emit(proxy, "Stake");
-      await time.increase(70);
+      await time.increase(4100);
       await expect(proxy.connect(user2).claimrewards()).to.be.revertedWith('You must wait until the delay period to claim rewards.');
     })
 
     it("The owner is able to change unbondingPeriod", async function() {
       expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
-      await time.increase(70);
+      await time.increase(5000);
       expect(await proxy.connect(user1).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user1).unstakeOne(1)).to.emit(proxy, "Unstake");
-      await time.increase(40);
+      await time.increase(3200);
       await expect(proxy.connect(user1).withdrawNFT(1))
-      await proxy.connect(deployer).changeunbondingPeriod(400)
+      await proxy.connect(deployer).changeunbondingPeriod(200)
       expect(await proxy.connect(user2).stakeNFT(2)).to.emit(proxy, "Stake");
-      await time.increase(70);
+      await time.increase(5000);
       await expect(proxy.connect(user2).claimrewards()).to.emit(proxy, "claimRewards");
       expect(await proxy.connect(user2).unstakeOne(2)).to.emit(proxy, "Unstake");
-      await time.increase(40);
-      await expect(proxy.connect(user2).withdrawNFT(1)).to.be.revertedWith('You need to wait for the Unbonding Period to withdraw the NFT')
+      await time.increase(259);
+      await expect(proxy.connect(user2).withdrawNFT(2)).to.be.revertedWith('You need to wait for the Unbonding Period to withdraw the NFT')
     })
 
     it("Anyone else except the owner cannot use upgraded onlyOwner functions", async function() {
       await expect(proxy.connect(user1).changeRewardRate(3)).to.be.revertedWithCustomError(proxy, 'OwnableUnauthorizedAccount');
       await expect(proxy.connect(user1).changedelayRate(1)).to.be.revertedWithCustomError(proxy, 'OwnableUnauthorizedAccount');
       await expect(proxy.connect(user1).changeunbondingPeriod(1)).to.be.revertedWithCustomError(proxy, 'OwnableUnauthorizedAccount')
+    })
+
+    it("Testing the tricky edge case here", async function() {
+      expect(await proxy.connect(user1).stakeNFT(1)).to.emit(proxy, "Stake");
+      // Day 0 to 29 
+      await time.increase(2505600);
+    
+      // (29 Days completed - 30th Day starts)
+      expect(await proxy.connect(user2).stakeNFT(2)).to.emit(proxy, "Stake");
+      // Day 30 to 59
+      await time.increase(2505600);
+    
+      // (59 Days completed - 60th Day starts)
+      await proxy.connect(deployer).changeRewardRate(20);
+      // Day 60 - 119
+      await time.increase(5097600)
+    
+      // (119 Days completed - 120th Day starts)
+      const rewardAat120 = await proxy.calcRewards(user1.address);
+      const rewardBat120 = await proxy.calcRewards(user2.address);
+      // Days 120 - 179
+      await time.increase(5097600);
+      
+      // (179 Days completed - 180th Day starts)
+      await proxy.connect(deployer).changeRewardRate(30);
+      // Days 180 - 359
+      await time.increase(15465600);
+    
+    
+      // (359 Days completed - 360th Day starts)
+      const rewardAat360 = await proxy.calcRewards(user1.address);
+      const rewardBat360 = await proxy.calcRewards(user2.address);
     })
   })
 });
