@@ -114,7 +114,7 @@ contract StakeV2 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
     function stakeNFT(uint256 _nftID) public nonReentrant whenNotPaused {
 
         // A genesis NFT space reserved to stop comparing zeroed-values. Hence NFT locations will start from 1 index as well the NFT IDs.
-        if(emptyorfull == false) {
+        if(!emptyorfull) {
             StakedNFT memory genesis = StakedNFT({
                 nftID: 0,
                 owner: msg.sender,
@@ -183,7 +183,7 @@ contract StakeV2 is Initializable, OwnableUpgradeable, UUPSUpgradeable, Pausable
         require(_nftIDs.length <= 10, "You can only stake 10 NFTs in a single transaction");
         
         // Add a genesis if bool is false
-        if(emptyorfull == false) {
+        if(!emptyorfull) {
             StakedNFT memory genesis = StakedNFT({
                 nftID: 0,
                 owner: msg.sender,
